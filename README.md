@@ -6,6 +6,8 @@ i dont think the name's solid atm. here are my thoughts on it:
     - Deep Throb Galactic (idk)
     - Deep Buzz Galactic (suggestion from the discord) (personally, i dont quite like it -flexxy)
 ~ flexxy
+
+..also, hi sov!
 ```
 
 (instructions are wip)
