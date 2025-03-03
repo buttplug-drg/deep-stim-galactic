@@ -7,4 +7,4 @@ edition = "2021"
 crate-type = [ "cdylib" ]
 
 [dependencies]
-mlua = { version = "0.10.3", features = [ "lua54" , "async" , "macros" , "module" ] }
+mlua = { version = "0.10.3", features = [ "lua54", "module" ] }
