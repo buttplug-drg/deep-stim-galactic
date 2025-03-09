@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-ARTEFACTNAME="luabutt.dll"
+DLLNAME="luabutt.dll"
 LUADIR="$(realpath "./lua")"
 MODNAME="Deepcock"
 
@@ -30,13 +30,13 @@ DRG_SCRIPTDIR="Scripts"
 if [ -d "$DRG_BASEDIR" ]; then
     DRG_EXEDIR="$(realpath "$DRG_BASEDIR/FSD/Binaries/Win64")"
     DRG_UE4SSDIR="$DRG_EXEDIR"
-    if [[ $UE4SS_EXPERIMENTAL = "1" ]]; then
+    if [ -d "$DRG_UE4SSDIR/ue4ss" ]; then
         DRG_UE4SSDIR="$DRG_UE4SSDIR/ue4ss"
     fi
     DRG_MODDIR="$DRG_UE4SSDIR/Mods/$MODNAME"
 
-    ln -sf "$ARTEFACTDIR/$ARTEFACTNAME" "$DRG_MODDIR/$ARTEFACTNAME"
-    ln -sf "$LUADIR" "$DRG_MODDIR/$DRG_SCRIPTDIR"
+    ln -sf "$ARTEFACTDIR/$DLLNAME" "$DRG_MODDIR/$DRG_SCRIPTDIR"
+    ln -sf "$LUADIR"/* "$DRG_MODDIR/$DRG_SCRIPTDIR"
     echo "Don't forget to put lua54.dll in the executable dir ($DRG_EXEDIR)"
 else
     echo "Provided DRG base dir ($DRG_BASEDIR) is not a directory"
