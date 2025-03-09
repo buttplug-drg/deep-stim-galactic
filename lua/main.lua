@@ -11,7 +11,7 @@ luabutt.hello_from_rs()
 
 
 local last_location = nil
-function read_player_location()
+local function log_player_location()
     local player_controller = uhelpers:GetPlayerController()
     local player_pawn = player_controller.pawn
     local location = player_pawn:K2_GetActorLocation()
@@ -22,10 +22,11 @@ function read_player_location()
                location.Y - last_location.Y,
                location.Z - last_location.Z)
     end
-    printf("fname %s", player_pawn:GetFName())
-    printf("fullname %s", player_pawn:GetFullName())
+end
 
-    printf("valid " .. tostring(player_pawn:IsValid()))
+local function log_player_health()
+    local player_controller = uhelpers:GetPlayerController()
+    local player_pawn = player_controller.pawn
 
     local player_health_component = player_pawn.HealthComponent
     -- this is why i hate OO systems.
@@ -33,7 +34,9 @@ function read_player_location()
     -- tend to get sooo on their asses about "the interface" and "oooo must stay SOLID"
     -- FUCK YOU
     -- i tried for so goddamn long to get this working in the following way:
-    -- local player_health_component = player_pawn:GetHealthComponent()
+    --[[
+        local player_health_component = player_pawn:GetHealthComponent()
+    --]]
     -- and it just fails
     -- why? fuck you
     -- it fails.
@@ -51,10 +54,14 @@ function read_player_location()
     -- and why does it come from   s e v e n   layers of inheritance????????
     -- fuck you fuck you fuck you
 
-    printf("player health %f", player_health_component:GetHealth())
+    printf("Player health: %f", player_health_component:GetHealth())
 end
 
 RegisterKeyBind(Key.F1, function()
     printf("hit F1")
-    read_player_location()
+    log_player_location()
+end)
+RegisterKeyBind(Key.F2, function()
+    printf("hit F2")
+    log_player_health()
 end)
