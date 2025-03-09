@@ -1,14 +1,13 @@
-local luabutt = require("luabutt")
+local lb = require("luabutt")
 local uhelpers = require("UEHelpers")
 
 local function printf(s, ...)
     return print("[deepcock] " .. string.format(s, ...))
 end
 
-print("Hello from Lua!")
-luabutt.hello_from_rs()
-
-
+printf("Hewwo!!")
+lb.hello_from_rs()
+lb.init(12345)
 
 local last_location = nil
 local function log_player_location()

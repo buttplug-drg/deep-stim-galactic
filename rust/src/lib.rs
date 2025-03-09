@@ -317,6 +317,12 @@ fn stop_vibration(lua: &Lua, _: ()) -> LuaResult<()> {
     Ok(())
 }
 
+fn hello_from_rs(lua: &Lua, _: ()) -> LuaResult<()> {
+    lua.log("Hello from Rust!");
+
+    Ok(())
+}
+
 #[mlua::lua_module]
 fn luabutt(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table().expect("failed to create exports table");
@@ -328,12 +334,6 @@ fn luabutt(lua: &Lua) -> LuaResult<LuaTable> {
     exports.set("stop_vibration", lua.create_function(stop_vibration)?)?;
 
     Ok(exports)
-}
-
-fn hello_from_rs(lua: &Lua, _: ()) -> LuaResult<()> {
-    lua.log("Hello from Rust!");
-
-    Ok(())
 }
 
 /*
