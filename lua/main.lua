@@ -64,3 +64,13 @@ RegisterKeyBind(Key.F2, function()
     printf("hit F2")
     log_player_health()
 end)
+local next_val = 0.5
+RegisterKeyBind(Key.F3, function()
+    printf("hit F3")
+    lb.set_vibration(next_val)
+    if next_val == 0 then
+        next_val = 0.5
+    else
+        next_val = 0
+    end
+end)

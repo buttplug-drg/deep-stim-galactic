@@ -27,14 +27,27 @@ use tokio::{ runtime::Runtime
            , time::{ Instant
                    , sleep
                    , sleep_until
+                   // , timeout
                    }
+           // , select
            };
-use futures::StreamExt;
+// sadly, i have to introduce another dependency to use my fucking futures correctly
+// every day i become more of a js dev.
+// but i rlly dont wanna write rust async library code myself rn
+// and it would amount to stackoverflow copypasta anyways
+use futures::{ StreamExt
+             , future::{ FutureExt
+                       , join_all
+                       }
+             };
 use mlua;
 use mlua::prelude::*;
 
 const MSGCHANSZ: usize = 65535;
-const TICK_TIME_MILLIS: u64 = 50;
+
+// INFO: set the server to run at 8tps.
+//  cant run it too fast, bc otherwise might end up overwhelming the plug with commands
+const TICK_TIME_MILLIS: u64 = 125;
 
 macro_rules! log {
     ($($arg:tt)*) => {
@@ -70,6 +83,7 @@ enum Msg {
     SetVibration(f64),
     AddVibration(f64),
     StopVibration,
+    Shutdown,
 }
 
 enum PushMsgError {
@@ -84,6 +98,8 @@ fn init(lua: &Lua, server_port: u16) -> LuaResult<()> {
     // most of this fn is just copied from https://github.com/qdot/buttplug-nightmare-kart/blob/master/buttplug-mlua/src/lib.rs
     // ..whagever. thx qdot!
     lua.log("initializing runtime...");
+    eprintln!("[buttplug] Hello STDERR\\n");
+
     if let Some(_) = RUNTIME.get() {
         lua.log("runtime already initialized.");
         return Ok(());
@@ -121,6 +137,9 @@ fn get_ws_addr(server_port: u16) -> String {
     format!("ws://localhost:{}", server_port)
 }
 
+// HACK: lots of copypasta in the following.
+// TODO: factor out some of the more egregious, legibility-harming copypasta
+//  - introduce state struct maybe?
 async fn run(mut recv: Receiver<Msg>, server_port: u16) {
     let client = ButtplugClient::new("buttplug-lua");
 
@@ -152,21 +171,23 @@ async fn run(mut recv: Receiver<Msg>, server_port: u16) {
     } else {
         log!("no devices currently connected.");
     }
+
+    let mut last_vibration_strength: f64 = 0.0;
+    let mut next_vibration_strength: f64 = 0.0;
+
+    // main loop
     'outer: loop {
         let now = Instant::now();
-        // the main loop
-        // INFO: the idea currently is to just run this on 50ms ticks (20tps), handle client and
-        //  server events, and then send the appropriate command(s) to the server.
-        //      - idk if it's safe to assume that only up to 255 msgs will be sent within 50ms
-        //      - if we just immediately loop without any sort of delay, we will be spinlocking for
-        //        potentially a while (cringe)
-        //      - or maybe "wait" for when we wanna send a command before reading server evts?
-        //          ...since maybe server evts only rlly matter when we're trying to send anyways
-        //          ...but this would cause problems with eg. device disconnects not being
-        //          immediately recognized and reported.
-        //
-        //  ...i'm just gonna run it at 20tps for now.
-        while let Some(evt) = evt_stream.next().await {
+        let devices = client.devices();
+        while let Some(Some(evt)) = evt_stream.next().now_or_never() {  // hmgh. sure. whagever
+            // it's safe to use .now_or_never() to consume the evts, bc the evt queue only serves
+            // items that have already been received locally by the BP client
+            // so it's a case of Either having to wait for an evt (when the stream's empty)
+            //      in which case we sorta just discard empty future
+            // Or we just instantly get an evt out of it
+            // either way, no evts should be discarded.
+            // thx qdot
+            log!("[INFO] event get!: {evt:?}");
             match evt {
                 ButtplugClientEvent::ScanningFinished => {
                     log!("[INFO] Scanning finished");
@@ -218,6 +239,8 @@ async fn run(mut recv: Receiver<Msg>, server_port: u16) {
                             log!("[ERROR] Unknown error");
                         } 
                     }
+                    // INFO: when an error happens, just proceed to shutdown routine for now
+                    //  it's someone's ass we're talking about. lets just try to 
                     break 'outer;
                 }
             }
@@ -227,20 +250,19 @@ async fn run(mut recv: Receiver<Msg>, server_port: u16) {
             match recv.try_recv() {
                 Ok(msg) => match msg {
                     Msg::SetVibration(strength) => {
-                        let strength = min(strength, 1.);
+                        next_vibration_strength = strength;
                         log!("[INFO] set vibration to {strength:.2}");
-                        for device in client.devices() {
-                            let _ = device.vibrate(&ScalarValueCommand::ScalarValue(strength)).await;
-                        }
                     }
                     Msg::AddVibration(strength) => {
-                        todo!()
+                        next_vibration_strength += strength;
                     }
                     Msg::StopVibration => {
                         log!("[INFO] stop vibration");
-                        for device in client.devices() {
-                            let _ = device.stop().await;
-                        }
+                        next_vibration_strength = 0.0;  // same thing
+                    }
+                    Msg::Shutdown => {
+                        log!("[INFO] Shutdown");
+                        break 'outer;
                     }
                 }
                 Err(e) => {
@@ -257,17 +279,74 @@ async fn run(mut recv: Receiver<Msg>, server_port: u16) {
 
         }
 
+        next_vibration_strength = clamp(next_vibration_strength, 0.0, 1.0);
+
+        // it's oke to use == on floats here i think
+        // mainly wanna prevent spamming the device with the same vibration strength over n over
+        // again for no good reason
+        // this is enough to prevent that.
+        if next_vibration_strength == 0.0 {  // special case where next_vibration_strength == 0:
+                                             // use stop() command to make sure it absolutely stops
+            let mut vibration_futures = vec![];
+            let devices = client.devices();
+            for device in &devices {
+                vibration_futures.push(device.stop());
+            }
+            for (idx, device_result) in join_all(vibration_futures).await.into_iter().enumerate() {
+                if let Err(e) = device_result {
+                    match e {
+                        ButtplugClientError::ButtplugConnectorError(_) => {
+                            log!("[WARN] Buttplug connector error (device {})", devices[idx].name());
+                        }
+                        ButtplugClientError::ButtplugError(_) => {
+                            log!("[WARN] Buttplug error (device {})", devices[idx].name());
+                        }
+                    }
+                }
+            }
+        } else if next_vibration_strength != last_vibration_strength {
+            let mut vibration_futures = vec![];
+            let devices = client.devices();
+            for device in &devices {
+                vibration_futures.push(device.vibrate(&ScalarValueCommand::ScalarValue(next_vibration_strength)));
+            }
+            for (idx, device_result) in join_all(vibration_futures).await.into_iter().enumerate() {
+                if let Err(e) = device_result {
+                    match e {
+                        ButtplugClientError::ButtplugConnectorError(_) => {
+                            log!("[WARN] Buttplug connector error (device {})", devices[idx].name());
+                        }
+                        ButtplugClientError::ButtplugError(_) => {
+                            log!("[WARN] Buttplug error (device {})", devices[idx].name());
+                        }
+                    }
+                }
+            }
+        }
+
+        last_vibration_strength = next_vibration_strength;
+
         sleep_until(now + tick_time).await;
     }
 
     // shutdown logic
     log!("[INFO] Attempting to stop all known devices.");
+    // dont trust the server alone to stop all devices properly
+    // not that i think it's bad
+    // just.
+    // it's someone's ass we're talking about
+    // might as well add another attempt at a failsafe
+    let mut shutdown_futures = vec![];
     for device in client.devices() {
-        let _ = device.stop().await;  // doign our best here
+        shutdown_futures.push(device.stop());
     }
+    let _ = join_all(shutdown_futures).await;
+    let _ = client.disconnect().await;
     log!("[INFO] Shuting down");
 }
 
+// not currently sure of the utility of returning an error from this function
+// since the error handling would have to be done on a per-wrapper-function basis
 fn push_msg(lua: &Lua, msg: Msg) -> Result<(), PushMsgError> {
     let send = match SEND.get() {
         Some(send) => send,
@@ -294,7 +373,27 @@ fn push_msg(lua: &Lua, msg: Msg) -> Result<(), PushMsgError> {
 }
 
 fn min<T: PartialOrd>(a: T, b: T) -> T {
-    return if a > b { b } else { a }
+    if a > b {
+        b
+    } else {
+        a
+    }
+}
+fn max<T: PartialOrd>(a: T, b: T) -> T {
+    if a < b {
+        b 
+    } else {
+        a 
+    }
+}
+fn clamp<T: PartialOrd>(x: T, lo: T, hi: T) -> T {
+    if x < lo {
+        lo
+    } else if x > hi {
+        hi
+    } else {
+        x
+    }
 }
 
 fn set_vibration(lua: &Lua, strength: f64) -> LuaResult<()> {
@@ -316,6 +415,12 @@ fn stop_vibration(lua: &Lua, _: ()) -> LuaResult<()> {
 
     Ok(())
 }
+fn shutdown(lua: &Lua, _: ()) -> LuaResult<()> {
+    log!("[INFO] request shutdown");
+    let _ = push_msg(lua, Msg::Shutdown);
+
+    Ok(())
+}
 
 fn hello_from_rs(lua: &Lua, _: ()) -> LuaResult<()> {
     lua.log("Hello from Rust!");
@@ -332,6 +437,7 @@ fn luabutt(lua: &Lua) -> LuaResult<LuaTable> {
     exports.set("set_vibration", lua.create_function(set_vibration)?)?;
     exports.set("set_vibration_percent", lua.create_function(set_vibration_percent)?)?;
     exports.set("stop_vibration", lua.create_function(stop_vibration)?)?;
+    exports.set("shutdown", lua.create_function(shutdown)?)?;
 
     Ok(exports)
 }
