@@ -1,9 +1,5 @@
 # Deep Stim Galactic!
-although i still think of it as Deep Cock Galactic.
 
-mod isnt just for Penis Havers™ tho, and also this mod has nothing rlly to do with cocks, so i dont wanna call it that officially.
-
-whagever, on to more important things:
 # :3
 :3
 
@@ -56,7 +52,7 @@ if youre on windows... well, lmk if you find a good solution ig, or just draft a
 
 and dont forget to `Deepcock : 1` in `mods.txt` uwu
 
-## install DSG the "hard" way (deadass did not see this pun until after i wrote it)
+## install DSG the "hard" way
 in your DRG install:
 - make sure UE4SS is installed (see regular install guide above)
 - make sure lua54.dll is in the executable directory (again, see above)
