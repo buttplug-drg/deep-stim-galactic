@@ -35,7 +35,11 @@ developing on any platform other than linux is currently untested and unsupporte
 ### build the buttplug bindings:
 if you arent on windows:
 - run `make build` (`make build-release` for an optimized non-debug build)
-- if that doesnt work, do `cd rust` and then `cross build --target x86_64-pc-windows-gnu` (or `cargo cross build --target x86_64-pc-windows-gnu` maybe) (add `--release` flag to the command for optimizeed release build)
+- if that doesnt work, do `cd rust` and then `cross build --target x86_64-pc-windows-gnu`
+
+  (or `cargo cross build --target x86_64-pc-windows-gnu` maybe)
+
+  (add `--release` flag to the command for optimizeed release build)
 
 if you are on windows for whatever fucking reason:
 - just `cd rust` and then `cargo build`, or `cargo build --release`. congratulations, you dont need to deal with cross-compilation.
