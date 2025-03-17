@@ -5,15 +5,15 @@ local function printf(s, ...)
     return print("[deepcock] " .. string.format(s, ...))
 end
 
-printf("Hewwo!!")
-lb.hello_from_rs()
 lb.init(12345)
+
 
 local last_location = nil
 local function log_player_location()
-    local player_controller = uhelpers:GetPlayerController()
-    local player_pawn = player_controller.pawn
-    local location = player_pawn:K2_GetActorLocation()
+    -- local player_controller = uhelpers:GetPlayerController()
+    -- local player_pawn = player_controller.pawn
+    local player_character = uhelpers:GetPlayer()
+    local location = player_character:K2_GetActorLocation()
     print(string.format("Player location: {X=%.3f, Y=%.3f, Z=%.3f}\n", location.X, location.Y, location.Z))
     if last_location then
         printf("Player moved: {delta_X=%.3f, delta_Y=%.3f, delta_Z=%.3f}\n",
@@ -21,13 +21,18 @@ local function log_player_location()
                location.Y - last_location.Y,
                location.Z - last_location.Z)
     end
+    last_location = location
 end
 
-local function log_player_health()
-    local player_controller = uhelpers:GetPlayerController()
-    local player_pawn = player_controller.pawn
+local function get_player_health_component()
+    return uhelpers:GetPlayer().HealthComponent
+end
 
-    local player_health_component = player_pawn.HealthComponent
+local function get_player_health()
+    local player_health_component = get_player_health_component()
+
+    -- local player_character = uhelpers:GetPlayer()
+    -- local player_health_component = player_character.HealthComponent
     -- this is why i hate OO systems.
     -- it's not that OO is inherently terrible. it's just that the ppl who design this sorta shit
     -- tend to get sooo on their asses about "the interface" and "oooo must stay SOLID"
@@ -53,24 +58,68 @@ local function log_player_health()
     -- and why does it come from   s e v e n   layers of inheritance????????
     -- fuck you fuck you fuck you
 
-    printf("Player health: %f", player_health_component:GetHealth())
+    return player_health_component:GetHealth()
 end
 
-RegisterKeyBind(Key.F1, function()
-    printf("hit F1")
-    log_player_location()
-end)
-RegisterKeyBind(Key.F2, function()
-    printf("hit F2")
-    log_player_health()
-end)
-local next_val = 0.5
-RegisterKeyBind(Key.F3, function()
-    printf("hit F3")
-    lb.set_vibration(next_val)
-    if next_val == 0 then
-        next_val = 0.5
-    else
-        next_val = 0
-    end
+local function damage_player(amount)
+    local health_component = get_player_health_component()
+    health_component:TakeDamageSimple(amount, nil, nil)
+end
+
+local function nop() end
+
+local function register_keybinds()
+    RegisterKeyBind(Key.F1, function()
+        printf("hit F1")
+        log_player_location()
+    end)
+    RegisterKeyBind(Key.F2, function()
+        printf("hit F2")
+        printf("%f", get_player_health())
+    end)
+    local next_val = 0.5
+    RegisterKeyBind(Key.F3, function()
+        printf("hit F3")
+        lb.set_vibration(next_val)
+        if next_val == 0 then
+            next_val = 0.5
+        else
+            next_val = 0
+        end
+    end)
+    RegisterKeyBind(Key.F4, function()
+        printf("hit f4")
+        damage_player(10)
+    end)
+
+    -- Some quick testing reveals that the function to hook to do things at the start of the round is called
+    --  /Script/FSD.FSDGameMode:StartGame
+    -- TODO: figure out if multiplayer is special
+    -- TODO: figure out if deepdives are special
+
+    RegisterHook("/Script/FSD.FSDGameMode:StartGame",
+        function()
+            print("Function /Script/FSD.FSDGameMode:StartGame start")
+        end,
+        function()
+            print("Function /Script/FSD.FSDGameMode:StartGame end")
+        end)
+    -- RegisterHook("/Script/Engine.GameMode:RestartGame",
+    --     function()
+    --         print("Function /Script/Engine.GameMode:RestartGame start")
+    --     end,
+    --     function()
+    --         print("Function /Script/Engine.GameMode:RestartGame end")
+    --     end)
+    -- RegisterHook("/Game/Game/BP_GameState.BP_GameState_C:StartGame",
+    --     function()
+    --         print("Function /Game/Game/BP_GameState.BP_GameState_C:StartGame happened")
+    --     end)
+
+    RegisterKeyBind(Key.F5, function()
+    end)
+end
+RegisterKeyBind(Key.F10, function()
+    printf("soft-reloading.")
+    register_keybinds()
 end)
