@@ -1,12 +1,18 @@
-local lb = require("luabutt")
+-- TODO: uncomment
+-- local lb = require("luabutt")
 local uhelpers = require("UEHelpers")
 
 local function printf(s, ...)
     return print("[deepcock] " .. string.format(s, ...))
 end
 
-lb.init(12345)
+-- TODO: uncomment
+-- lb.init(12345)
 
+-- the player character
+    -- on targed damaged: PlayerCharacter:Client_TargetDamaged(...)
+    -- on weapon fire start: PlayerCharacter:OnFirePressed
+    -- on weapon fire stop: PlayerCharacter:OnFireReleased
 
 local last_location = nil
 local function log_player_location()
@@ -31,33 +37,9 @@ end
 local function get_player_health()
     local player_health_component = get_player_health_component()
 
-    -- local player_character = uhelpers:GetPlayer()
-    -- local player_health_component = player_character.HealthComponent
-    -- this is why i hate OO systems.
-    -- it's not that OO is inherently terrible. it's just that the ppl who design this sorta shit
-    -- tend to get sooo on their asses about "the interface" and "oooo must stay SOLID"
-    -- FUCK YOU
-    -- i tried for so goddamn long to get this working in the following way:
-    --[[
-        local player_health_component = player_pawn:GetHealthComponent()
-    --]]
-    -- and it just fails
-    -- why? fuck you
-    -- it fails.
-    -- and i think "oh surely theres a reason this isnt directly accessible"
-    -- "surely maybe it has to be a private member for whichever reaso-"
-    -- IT ISNT EVEN A PRIVATE MEMVBER
-    -- as far as i can tell, the only reason that method exists is because blueprints cant handle
-    -- just accessing a fucking property on a class instance
-    -- so theres this stupid ass wrapper function with no obvious return type *that shows up in the
-    -- debugger as a fucking object*
-    -- and it's just useless to me.
-    -- great fucking red herring there, Ghost Ship.
-    -- fuck you.
-    -- and while we're at it, Dear Unreal Engine devs, what the fuck is a FloatProperty,
-    -- and why does it come from   s e v e n   layers of inheritance????????
-    -- fuck you fuck you fuck you
-
+    printf("health component names:")
+    printf("fname: %s", player_health_component.OnPlayerHit:GetFName())
+    printf("fullname: %s", player_health_component.OnPlayerHit:GetFullName())
     return player_health_component:GetHealth()
 end
 
@@ -68,58 +50,73 @@ end
 
 local function nop() end
 
-local function register_keybinds()
-    RegisterKeyBind(Key.F1, function()
-        printf("hit F1")
-        log_player_location()
-    end)
-    RegisterKeyBind(Key.F2, function()
-        printf("hit F2")
-        printf("%f", get_player_health())
-    end)
-    local next_val = 0.5
-    RegisterKeyBind(Key.F3, function()
-        printf("hit F3")
-        lb.set_vibration(next_val)
-        if next_val == 0 then
-            next_val = 0.5
-        else
-            next_val = 0
-        end
-    end)
-    RegisterKeyBind(Key.F4, function()
-        printf("hit f4")
-        damage_player(10)
-    end)
+--- WARN: uncommenting the following function definition (not even function call!) seems to crash the game on load. the fuck?
 
-    -- Some quick testing reveals that the function to hook to do things at the start of the round is called
-    --  /Script/FSD.FSDGameMode:StartGame
-    -- TODO: figure out if multiplayer is special
-    -- TODO: figure out if deepdives are special
-
-    RegisterHook("/Script/FSD.FSDGameMode:StartGame",
-        function()
-            print("Function /Script/FSD.FSDGameMode:StartGame start")
-        end,
-        function()
-            print("Function /Script/FSD.FSDGameMode:StartGame end")
+--[[ local function on_round_start()
+    -- print("round start")
+    RegisterHook("/Game/Character/BP_PlayerCharacter.BP_PlayerCharacter_C:BndEvt__HealthComponent_K2Node_ComponentBoundEvent_2_DamageSig__DelegateSignature",
+    -- RegisterHook("/Script/FSD.FSDGameMode:StartGame",
+        function(this, amount_param)
+            printf("took %f damage", amount_param:get())
         end)
-    -- RegisterHook("/Script/Engine.GameMode:RestartGame",
-    --     function()
-    --         print("Function /Script/Engine.GameMode:RestartGame start")
-    --     end,
-    --     function()
-    --         print("Function /Script/Engine.GameMode:RestartGame end")
-    --     end)
-    -- RegisterHook("/Game/Game/BP_GameState.BP_GameState_C:StartGame",
-    --     function()
-    --         print("Function /Game/Game/BP_GameState.BP_GameState_C:StartGame happened")
-    --     end)
-
-    RegisterKeyBind(Key.F5, function()
-    end)
 end
-RegisterKeyBind(Key.F10, function()
-    printf("soft-reloading.")
-    register_keybinds()
+]]
+
+local last_shield_damage
+local last_health_damage
+local last_shield_damage_time = os.clock()
+local last_health_damage_time = os.clock()
+
+ExecuteInGameThread(function()
+    LoadAsset("/Game/Character/BP_PlayerCharacter.BP_PlayerCharacter_C")
+    -- LoadAsset must be exec'd from game thread, and the hooks must wait for the asset to be loaded.
+    -- since LoadAsset is blocking, (but ExecuteInGameThread isnt), it's easiest to just do that in
+    -- the game thread too
+    RegisterHook("/Game/Character/BP_PlayerCharacter.BP_PlayerCharacter_C:BndEvt__HealthComponent_K2Node_ComponentBoundEvent_2_DamageSig__DelegateSignature",
+    function(this, amount_param)
+        local time = os.clock()
+        local dmg = amount_param:get()
+        if (time - last_shield_damage_time < 0.01 and last_shield_damage == dmg) then return end
+        last_shield_damage_time = time
+        last_shield_damage = dmg
+        printf("took %f shield damage", dmg)
+    end)
+    RegisterHook("/Game/Character/BP_PlayerCharacter.BP_PlayerCharacter_C:BndEvt__HealthComponent_K2Node_ComponentBoundEvent_1_HitSig__DelegateSignature",
+    function(this, amount_param)
+        local time = os.clock()
+        local dmg = amount_param:get()
+        if (time - last_health_damage_time < 0.01 and last_health_damage == dmg) then return end
+        last_health_damage_time = time
+        last_health_damage = dmg
+        printf("took %f health damage", dmg)
+    end)
+end)
+
+-- TODO: figure out if multiplayer is special
+-- TODO: figure out if deepdives are special
+
+--
+-- Keybinds
+--
+RegisterKeyBind(Key.F1, function()
+    printf("hit F1")
+    log_player_location()
+end)
+RegisterKeyBind(Key.F2, function()
+    printf("hit F2")
+    printf("%f", get_player_health())
+end)
+local next_val = 0.5
+RegisterKeyBind(Key.F3, function()
+    printf("hit F3")
+    lb.set_vibration(next_val)
+    if next_val == 0 then
+        next_val = 0.5
+    else
+        next_val = 0
+    end
+end)
+RegisterKeyBind(Key.F4, function()
+    printf("hit f4")
+    damage_player(10)
 end)
