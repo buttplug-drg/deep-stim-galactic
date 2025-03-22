@@ -50,18 +50,6 @@ end
 
 local function nop() end
 
---- WARN: uncommenting the following function definition (not even function call!) seems to crash the game on load. the fuck?
-
---[[ local function on_round_start()
-    -- print("round start")
-    RegisterHook("/Game/Character/BP_PlayerCharacter.BP_PlayerCharacter_C:BndEvt__HealthComponent_K2Node_ComponentBoundEvent_2_DamageSig__DelegateSignature",
-    -- RegisterHook("/Script/FSD.FSDGameMode:StartGame",
-        function(this, amount_param)
-            printf("took %f damage", amount_param:get())
-        end)
-end
-]]
-
 local last_shield_damage
 local last_health_damage
 local last_shield_damage_time = os.clock()
