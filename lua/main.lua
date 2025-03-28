@@ -1,34 +1,22 @@
--- TODO: uncomment
--- local lb = require("luabutt")
-local uhelpers = require("UEHelpers")
-
 local function printf(s, ...)
     return print("[deepcock] " .. string.format(s, ...))
 end
 
+printf("attempt to load luabutt")
 -- TODO: uncomment
+local lb = require("luabutt")
+printf("luabutt successfully loaded")
+local uhelpers = require("UEHelpers")
+
+-- TODO: uncomment
+-- printf("init buttplug thing..")
 -- lb.init(12345)
+-- printf("init buttplug thing complete uwu")
 
 -- the player character
     -- on targed damaged: PlayerCharacter:Client_TargetDamaged(...)
     -- on weapon fire start: PlayerCharacter:OnFirePressed
     -- on weapon fire stop: PlayerCharacter:OnFireReleased
-
-local last_location = nil
-local function log_player_location()
-    -- local player_controller = uhelpers:GetPlayerController()
-    -- local player_pawn = player_controller.pawn
-    local player_character = uhelpers:GetPlayer()
-    local location = player_character:K2_GetActorLocation()
-    print(string.format("Player location: {X=%.3f, Y=%.3f, Z=%.3f}\n", location.X, location.Y, location.Z))
-    if last_location then
-        printf("Player moved: {delta_X=%.3f, delta_Y=%.3f, delta_Z=%.3f}\n",
-               location.X - last_location.X,
-               location.Y - last_location.Y,
-               location.Z - last_location.Z)
-    end
-    last_location = location
-end
 
 local function get_player_health_component()
     return uhelpers:GetPlayer().HealthComponent
@@ -55,6 +43,8 @@ local last_health_damage
 local last_shield_damage_time = os.clock()
 local last_health_damage_time = os.clock()
 
+
+
 ExecuteInGameThread(function()
     LoadAsset("/Game/Character/BP_PlayerCharacter.BP_PlayerCharacter_C")
     -- LoadAsset must be exec'd from game thread, and the hooks must wait for the asset to be loaded.
@@ -67,6 +57,7 @@ ExecuteInGameThread(function()
         if (time - last_shield_damage_time < 0.01 and last_shield_damage == dmg) then return end
         last_shield_damage_time = time
         last_shield_damage = dmg
+        -- lb:add_temp_static(dmg / 200, 8)
         printf("took %f shield damage", dmg)
     end)
     RegisterHook("/Game/Character/BP_PlayerCharacter.BP_PlayerCharacter_C:BndEvt__HealthComponent_K2Node_ComponentBoundEvent_1_HitSig__DelegateSignature",
@@ -76,6 +67,7 @@ ExecuteInGameThread(function()
         if (time - last_health_damage_time < 0.01 and last_health_damage == dmg) then return end
         last_health_damage_time = time
         last_health_damage = dmg
+        -- lb:add_temp_static(dmg / 100, 8)
         printf("took %f health damage", dmg)
     end)
 end)
@@ -97,7 +89,7 @@ end)
 local next_val = 0.5
 RegisterKeyBind(Key.F3, function()
     printf("hit F3")
-    lb.set_vibration(next_val)
+    -- lb:set_vibration(next_val)
     if next_val == 0 then
         next_val = 0.5
     else

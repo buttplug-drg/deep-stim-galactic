@@ -48,7 +48,7 @@ const MSGCHANSZ: usize = 65535;
 
 // INFO: set the server to run at 8tps.
 //  cant run it too fast, bc otherwise might end up overwhelming the plug with commands
-const TICK_TIME_MILLIS: u64 = 125;
+const TICK_TIME_MILLIS: u64 = 1250;
 
 macro_rules! log {
     ($($arg:tt)*) => {
@@ -257,9 +257,6 @@ macro_rules! connect {
     }
 }
 
-// HACK: lots of copypasta in the following.
-// TODO: factor out some of the more egregious, legibility-harming copypasta
-//  - introduce state struct maybe?
 async fn run(mut recv: Receiver<VibrationCmd>, server_port: u16) {
     let client = ButtplugClient::new("buttplug-lua");
     connect!(client, server_port);
@@ -284,7 +281,6 @@ async fn run(mut recv: Receiver<VibrationCmd>, server_port: u16) {
     // main loop
     'outer: loop {
         let now = Instant::now();
-        let devices = client.devices();
         let was_vibration_stop = false;
 
         macro_rules! continue_if_stop_vibration {
@@ -295,7 +291,8 @@ async fn run(mut recv: Receiver<VibrationCmd>, server_port: u16) {
                 }
             }
         }
-
+        
+        info!("start buttplug event handling");
         while let Some(Some(evt)) = evt_stream.next().now_or_never() {  // hmgh. sure. whagever
             // it's safe to use .now_or_never() to consume the evts, bc the evt queue only serves
             // items that have already been received locally by the BP client
@@ -349,10 +346,12 @@ async fn run(mut recv: Receiver<VibrationCmd>, server_port: u16) {
                 }
             }
         }
+        info!("buttplug event handling complete");
 
+        info!("start deepcock event handling");
         loop {
-            match recv.try_recv() {
-                Ok(msg) => match msg {
+            match &recv.try_recv() {
+                Ok(msg) => match *msg {
                     VibrationCmd::SetBase{ strength } => {
                         info!("set base vibration to {strength:.2}");
                         continue_if_stop_vibration!();
@@ -392,8 +391,8 @@ async fn run(mut recv: Receiver<VibrationCmd>, server_port: u16) {
                 Err(e) => {
                     // legit no idea how this could possibly happen.
                     // thats what asserts are for tho
-                    assert_ne!(e, TryRecvError::Disconnected,
-                               "Sender side unexpectedly and impossibly disconnected.");
+                    assert!(!matches!(*e, TryRecvError::Disconnected),
+                            "Sender side unexpectedly and impossibly disconnected.");
 
                     // the only other thing that can possibly be is that the channel is empty for now.
                     // we just stop reading the channel in that case
@@ -401,6 +400,7 @@ async fn run(mut recv: Receiver<VibrationCmd>, server_port: u16) {
                 }
             };
         }
+        info!("deepcock event handling complete");
 
         // clear out all the already-over vibrations
         // do this after adding all the new effects to instantly remove zero-duration effects
@@ -602,6 +602,7 @@ fn shutdown(lua: &Lua, _: ()) -> LuaResult<()> {
 
 #[mlua::lua_module]
 fn luabutt(lua: &Lua) -> LuaResult<LuaTable> {
+    lua.log_info("create module table");
     let exports = lua.create_table().expect("failed to create exports table");
 
     // fuck
@@ -613,15 +614,24 @@ fn luabutt(lua: &Lua) -> LuaResult<LuaTable> {
             exports.set(stringify!($fn), lua.create_function($fn)?)
         }
     }
-
+    lua.log_info("add fn 'init'");
     add_export!(init)?;
+    lua.log_info("add fn 'set_base'");
     add_export!(set_base)?;
+    lua.log_info("add fn 'add_temp_static'");
     add_export!(add_temp_static)?;
+    lua.log_info("add fn 'add_linear_decay'");
     add_export!(add_linear_decay)?;
+    lua.log_info("add fn 'add_linear_ramp'");
     add_export!(add_linear_ramp)?;
+    lua.log_info("add fn 'add_temp_square_wave'");
     add_export!(add_temp_sq_wave)?;
+    lua.log_info("add fn 'stop_vibration'");
     add_export!(stop_vibration)?;
+    lua.log_info("add fn 'shutdown'");
     add_export!(shutdown)?;
+
+    lua.log_info("module table filled. good job everynyan");
 
     Ok(exports)
 }
